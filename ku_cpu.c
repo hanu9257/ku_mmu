@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 
 		pa = ku_traverse(ku_cr3, va);
 		if(pa == 0){
-			if(ku_page_fault(pid, va) != 0){
+			if(ku_page_fault(pid, va) != 0){ // TODO 왜 page_fault의 인자에 ku_cr3가 아닌 pid가 들어가는지 찾기
 				printf("ku_cpu: Fault handler is failed\n");
 				ku_mmu_fin(fd, pmem);
 				return 1;

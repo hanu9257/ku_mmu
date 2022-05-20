@@ -14,7 +14,7 @@ char ku_traverse(void *ku_cr3, char va)
 
 	/* page table */
 	entry = (char *)ku_cr3 + pte_offset;
-	if( !(*entry & 0x01) || (*entry & 0x02) )
+	if( !(*entry & 0x01) || (*entry & 0x02) ) // swaped or unused
 		return 0;
 
 	pa = (*entry & PFN_MASK) + page_offset;
