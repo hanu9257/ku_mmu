@@ -5,9 +5,11 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug",
-            "program": "${workspaceFolder}/${fileBasenameNoExtension}",
-            "args": ["1", "20"],
-            "cwd": "${workspaceFolder}"
+            "program": "${fileDirname}/${fileBasenameNoExtension}",
+            "args": ["input.txt", "128", "512"],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "C/C++: gcc build active file"
         }
     ]
+
 }

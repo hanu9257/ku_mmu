@@ -8,7 +8,7 @@
 			"args": [
 				"-fdiagnostics-color=always",
 				"-g",
-				"${file}",
+				"*.c",
 				"-o",
 				"${fileDirname}/${fileBasenameNoExtension}"
 			],
@@ -18,8 +18,12 @@
 			"problemMatcher": [
 				"$gcc"
 			],
-			"group": "build",
-			"detail": "compiler: /usr/bin/gcc"
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"detail": "compiler: /usr/bin/gcc",
+			
 		}
 	]
 }
