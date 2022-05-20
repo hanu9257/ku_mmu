@@ -90,11 +90,11 @@ void *ku_mmu_init(unsigned int pmem_size, unsigned int swap_size) {
     else return pmem;
 }
 
-// TODO 1. 새로운 프로세스 생성 but 실제로 fork()를 통해 생성하는 것이 아닌 새로운 PCB만 생성
-// TODO 2. PDBR(CR3) 새로운 프로세스를 위해 갱신
-// TODO 3. 전에 생성된 프로세스라면 해당 프로세스의 PDBR 반환
-// TODO 4. 프로세스당 256B Page Table 생성
-// TODO 5. PCB를 PCB list에 insert
+// 새로운 프로세스 생성 but 실제로 fork()를 통해 생성하는 것이 아닌 새로운 PCB만 생성
+// PDBR(CR3) 새로운 프로세스를 위해 갱신
+// 전에 생성된 프로세스라면 해당 프로세스의 PDBR 반환
+// 프로세스당 256B Page Table 생성
+// PCB를 PCB list에 insert
 int ku_run_proc(char fpid, void **ku_cr3) {
 // PCB가 있는지 탐색
     tempPCB = searchPCB(fpid);
