@@ -1,2 +1,4 @@
 *.dSYM
 ku_cpu
+.vscode
+.DS_Store
