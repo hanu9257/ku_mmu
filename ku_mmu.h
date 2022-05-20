@@ -40,6 +40,13 @@ PCB *tempPCB;
 int pmem_index = 0; 
 int swap_index = 0;
 
+void insertPCB(PCB * input);
+PCB *searchPCB(char searching_pid);
+int evict();
+int swap_out();
+int swap_in(ku_pte *accesed_pte);
+int map_on_pmem(ku_pte *accesed_pte);
+
 void insertPCB(PCB* input) {
     if(PCB_list -> head == NULL)
         PCB_list -> head = input;
@@ -63,21 +70,55 @@ PCB *searchPCB(char searching_pid) {
 
 
 void *pmem = NULL;
+// TODO pmem space에서 alloc list? array?를 구현해 매핑되는 pte의 정보를 가지고 있으면 구현에 용이할 것 같음
 void *swap = NULL;
+// TODO swap space는 pmem과 달리 순서대로 값이 해제되지 않음 -> free list, alloc list 구현 필요할 듯
+int pmem_is_full = 0; 
 
+/**
+ * @brief 
+ * 
+ * @return int 
+ */
 int evict() {
     return 0;
 }
 
+
+/**
+ * @brief 
+ * 
+ * @return int 
+ */
 int swap_out() {
+    /* pmem_index에 매핑되어있는 pte를 swap out시킴 */
     return 0;
 }
 
+/**
+ * @brief Swap in accessed pte.
+ * @param accesed_pte PTE wants to swap in to pysical memory.
+ * @return 0 on success, -1 on error.
+ */
 int swap_in(ku_pte *accesed_pte) {
+    if(pmem_is_full)
+        if(swap_out()) return -1;
+    // TODO pmem_index에 accessed_pte 매핑
+
+    // TODO accessed_pte의 p-bit을 1로 변경
     return 0;
 }
 
+/**
+ * @brief Map accessed pte to pysical memory.
+ * @param accesed_pte PTE wants to map.
+ * @return 0 on success, -1 on error.
+ */
 int map_on_pmem(ku_pte *accesed_pte) {
+    if(pmem_is_full)
+        if(swap_out()) return -1;
+    // TODO pmem_index에 accessed_pte 매핑
+    // TODO accessed_pte의 p-bit을 1로 변경
     return 0;
 }
 
@@ -108,35 +149,29 @@ int ku_run_proc(char fpid, void **ku_cr3) {
     return 0;
 }
 
-int pmem_full_flag = 0;
 
 // TODO 1. PTE did not mapped
 // TODO 2. swaped out?? or map new PTE?? Both case needs to consider free space in swap and pmem
 // TODO 3. 해당 함수가 호출되면 이후 ku_trav()가 실행될 때 address translation 성공 필요
+// ! swap 계열의 함수 작동 실패시 -1 반환 후 ku_page_fault 종료해야함
 int ku_page_fault(char pid, char va) {
     ku_pte *page_table = tempPCB -> PTBR; // PCB를 통해 
 	char pte_offset = (va & PFN_MASK) >> 2;
     ku_pte *target_pte = page_table+pte_offset;
-    if(target_pte -> PFN == 0x0 && target_pte -> unused_bit == 0x0) {
+    if(target_pte -> PFN == 0x0 && target_pte -> unused_bit == 0x0)
         // TODO : Demand paging
         /*  
         1. pmem에 빈 자리가 있는지 확인
         2. 빈 자리가 없을 경우 avict() -> pmem_cnt가 끝까지 찼을 경우(왜냐하면 프로세스가 종료되지 않음 -> 이게 골때리네 free list가 굳이 필요가 없구나)
         3. 빈 자리가 있을 경우 그냥 넣기 -> pmem_cnt가 끝까지 차지 않았을 경우 
         */
-        if(pmem_full_flag) {
-            evict();
-            map_on_pmem(target_pte);
-        } else {
-            map_on_pmem(target_pte);
-        }    
-    } else {
+        map_on_pmem(target_pte);  
+    else 
         // TODO : swap in
-        swap_out();
-        swap_in(target_pte);
         /* 
         swap이 발생했으므로 pmem에는 빈 자리가 존재할 수 없음 -> pmem_cnt를 통해 FIFO avict 
+        각 함수의 정상 작동 여부에 따라 -1을 반환해야 할 수도 있음
         */
-    }
+        swap_in(target_pte); 
     return 0;
 }
