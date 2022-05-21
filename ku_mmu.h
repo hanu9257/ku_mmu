@@ -1,6 +1,7 @@
 #define PAGE_SIZE 4
 #define PTE_MASK 0xFE
 #define PFN_MASK 0xFC
+#pragma pack(1)
 
 /*
 If every bit is 0 then it is unmapped 
@@ -9,10 +10,15 @@ If every bit is 0 then it is unmapped
 1bit present bit
 */
 typedef struct ku_pte {
-    unsigned int PFN : 6;
-    unsigned int unused_bit : 1;
     unsigned int present_bit : 1;
+    unsigned int unused_bit : 1;
+    unsigned int PFN : 6;
 } ku_pte;
+
+typedef struct test
+{
+    unsigned int a :1;
+} test;
 
 /*
 char pid
