@@ -22,23 +22,44 @@ PCB *next
 */
 typedef struct PCB {
     char pid;
-    void *PTBR;
+    ku_pte *PTBR;
     struct PCB *prev;
     struct PCB *next;
 } PCB;
 
-struct linked_list {
+// free list + alloc list node 개수의 합은 PFN 개수와 동일
+typedef struct node {
+    // char pid;
+    ku_pte *rmap;
+    // unsigned int prev_index;
+    unsigned int next_index;
+} node;
+
+/*
+int free_head;
+int alloc_head;
+void *alloc_area;
+node *free_and_alloc;
+unsigned int full : 1;f
+ */
+typedef struct space {
+    int free_head;
+    int alloc_head;
+    int free_tail;
+    void *alloc_area;
+    node *free_and_alloc;
+} space;
+
+typedef struct linked_list {
     PCB* head;
 } linked_list;
 
+space ku_mmu_swap, ku_mmu_pmem;
 /* For controling PCB */
-struct linked_list *PCB_list = &linked_list;
+linked_list PCB_list;
+linked_list *PCB_list_ptr = &PCB_list;
 
 PCB *tempPCB;
-
-// TODO pmem : free list, allocated queue, swap : free list
-int pmem_index = 0; 
-int swap_index = 0;
 
 void insertPCB(PCB * input);
 PCB *searchPCB(char searching_pid);
