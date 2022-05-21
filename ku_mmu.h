@@ -69,17 +69,17 @@ int swap_in(ku_pte *accesed_pte);
 int map_on_pmem(ku_pte *accesed_pte);
 
 void insertPCB(PCB* input) {
-    if(PCB_list -> head == NULL)
-        PCB_list -> head = input;
+    if(PCB_list_ptr -> head == NULL)
+        PCB_list_ptr -> head = input;
     else {
-        PCB_list -> head -> next = input;
-        input -> prev = PCB_list -> head;
+        PCB_list_ptr -> head -> next = input;
+        input -> prev = PCB_list_ptr -> head;
     }
-    PCB_list -> head = input;
+    PCB_list_ptr -> head = input;
 }
 
 PCB *searchPCB(char searching_pid) {
-    tempPCB = PCB_list -> head;
+    tempPCB = PCB_list_ptr -> head;
     while(tempPCB != NULL) {
         if(tempPCB -> pid == searching_pid)
             return tempPCB;
