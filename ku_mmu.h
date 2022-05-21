@@ -95,9 +95,6 @@ PCB *searchPCB(char searching_pid) {
     return NULL;
 }
 
-// TODO pmem space에서 alloc list? array?를 구현해 매핑되는 pte의 정보를 가지고 있으면 구현에 용이할 것 같음
-// TODO swap space는 pmem과 달리 순서대로 값이 해제되지 않음 -> free list, alloc list 구현 필요할 듯
-
 /**
  * @brief 
  * 
@@ -122,19 +119,12 @@ int swap_out() {
  * @return 0 on success, -1 on error.
  */
 int swap_in(ku_pte *accesed_pte) {
-    // if(!pmem.free_head)
-    //     if(swap_out()) return -1;
-    // accesed_pte -> PFN = &pmem.free_and_alloc[pmem.free_head]; // accessed pte에게 PFN 할당
-    // accesed_pte -> present_bit = 1;
-    // accesed_pte -> unused_bit = 0;
     unsigned int take_back = ((accesed_pte -> PFN)<<1) + accesed_pte -> unused_bit;
     ku_mmu_swap.free_and_alloc[take_back].rmap = NULL; // free 된 swap을 free list에 insert
     ku_mmu_swap.free_and_alloc[take_back].next_index = ku_mmu_swap.alloc_head;
     ku_mmu_swap.alloc_head = take_back;
     if(map_on_pmem(accesed_pte)) return -1;
     // swap.free_and_alloc[take_back].pid = 0;
-    // TODO pmem_index에 accessed_pte 매핑
-    // TODO accessed_pte의 p-bit을 1로 변경
     return 0;
 }
 
@@ -147,12 +137,12 @@ int map_on_pmem(ku_pte *accesed_pte) {
     if(!ku_mmu_pmem.free_head)
         if(swap_out()) return -1;
     accesed_pte -> PFN = ku_mmu_pmem.free_head; // accessed pte에게 PFN 할당
+    // printf("mapped PFN : %d\n", accesed_pte -> PFN);
     accesed_pte -> present_bit = 1;
     accesed_pte -> unused_bit = 0;
     ku_mmu_pmem.free_and_alloc[ku_mmu_pmem.free_head].rmap = accesed_pte; // 할당된 pte reverse mapping
     ku_mmu_pmem.alloc_head = ku_mmu_pmem.free_and_alloc[ku_mmu_pmem.alloc_head].next_index; // alloc head 변경
-    // TODO pmem_index에 accessed_pte 매핑
-    // TODO accessed_pte의 p-bit을 1로 변경
+    ku_mmu_pmem.free_head = ku_mmu_pmem.free_and_alloc[ku_mmu_pmem.free_head].next_index; // alloc head 변경
     return 0;
 }
 
@@ -172,6 +162,8 @@ void init_space(space* input, unsigned int space_size) {
 
 // 메모리와 스왑 공간 동적할당
 void *ku_mmu_init(unsigned int pmem_size, unsigned int swap_size) {
+    // printf("size of ku_pte: %d\n", sizeof(ku_pte));
+    // printf("size of ku_pte: %d\n", sizeof(test));
     init_space(&ku_mmu_pmem, pmem_size);
     init_space(&ku_mmu_swap, swap_size);
     PCB_list_ptr -> head = NULL;
@@ -185,7 +177,6 @@ void *ku_mmu_init(unsigned int pmem_size, unsigned int swap_size) {
 // 프로세스당 256B Page Table 생성
 // PCB를 PCB list에 insert
 int ku_run_proc(char fpid, void **ku_cr3) {
-// PCB가 있는지 탐색
     tempPCB = searchPCB(fpid);
     if(!tempPCB) { // PCBlist에 fpid에 해당하는 PCB가 없을 경우
         tempPCB = (PCB *)malloc(sizeof(PCB));
@@ -200,26 +191,18 @@ int ku_run_proc(char fpid, void **ku_cr3) {
 
 // PTE did not mapped
 // swaped out?? or map new PTE?? Both case needs to consider free space in swap and pmem
-// TODO 3. 해당 함수가 호출되면 이후 ku_trav()가 실행될 때 address translation 성공 필요
+// 해당 함수가 호출되면 이후 ku_trav()가 실행될 때 address translation 성공 필요
 // ! swap 계열의 함수 작동 실패시 -1 반환 후 ku_page_fault 종료해야함
 int ku_page_fault(char pid, char va) {
     ku_pte *page_table = tempPCB -> PTBR; // PCB를 통해 
 	char pte_offset = (va & PFN_MASK) >> 2;
     // printf("target table addr: %p offset: %d\n", page_table, pte_offset);
-    ku_pte *target_pte = (char *)page_table + pte_offset; // 여기서 3시간 날림 대체 char *랑 ku_pte * 크기가 왜 다를까?
+    ku_pte *target_pte = page_table + pte_offset; // 여기서 3시간 날림 대체 char *랑 ku_pte * 크기가 왜 다를까?
     // printf("target pte addr: %p\n", target_pte);
-    if(target_pte -> PFN == 0x0 && target_pte -> unused_bit == 0x0)
-        /*  
-        1. pmem에 빈 자리가 있는지 확인
-        2. 빈 자리가 없을 경우 avict() -> pmem_cnt가 끝까지 찼을 경우(왜냐하면 프로세스가 종료되지 않음 -> 이게 골때리네 free list가 굳이 필요가 없구나)
-        3. 빈 자리가 있을 경우 그냥 넣기 -> pmem_cnt가 끝까지 차지 않았을 경우 
-        */
-        map_on_pmem(target_pte);  
-    else 
-        /* 
-        swap이 발생했으므로 pmem에는 빈 자리가 존재할 수 없음 -> pmem_cnt를 통해 FIFO avict 
-        각 함수의 정상 작동 여부에 따라 -1을 반환해야 할 수도 있음
-        */
-        swap_in(target_pte); 
+    if(target_pte -> PFN == 0x0 && target_pte -> unused_bit == 0x0) {
+        if(map_on_pmem(target_pte)) return -1; // TODO pbit이 아닌 ubit 값이 갱신됨
+    } else {
+        if(swap_in(target_pte)) return -1; 
+    }
     return 0;
 }
