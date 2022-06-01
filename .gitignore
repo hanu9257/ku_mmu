@@ -1,4 +1,5 @@
 *.dSYM
 ku_cpu
 .vscode
+*.txt
 .DS_Store

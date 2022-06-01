@@ -139,7 +139,7 @@ int swap_out()
 node *search_node(linked_list *list, unsigned int pte_index)
 {
     node *temp = list->tail->next;
-    while(temp->next)
+    while(temp)
     {
         if(temp->page_index == pte_index)
             return temp;
@@ -165,6 +165,8 @@ int swap_in(ku_pte *accesed_pte)
     prev_node->next = next_node;
     if(next_node)
         next_node->prev = prev_node;
+    else
+        ku_mmu_swap.alloc_list->head = src_node->prev;
     accesed_pte->PFN = src_node->rmap->PFN;
     accesed_pte->present_bit = 1;
     accesed_pte->unused_bit = 0;
