@@ -3,16 +3,19 @@
 #define PFN_MASK 0xFC
 #pragma pack(1)
 
-typedef struct linked_list;
-typedef struct ku_pte;
-typedef struct PCB;
-typedef struct node;
-typedef struct space;
+struct linked_list;
+struct ku_pte;
+struct PCB;
+struct PCB_list;
+struct node;
+struct space;
 void insertPCB(struct PCB *input);
 struct PCB *searchPCB(char searching_pid);
 int swap_out();
 int swap_in(struct ku_pte *accesed_pte);
 int map_on_pmem(struct ku_pte *accesed_pte);
+struct node *get_node(struct linked_list *list);
+void put_node(struct linked_list *list, struct node *input);
 
 typedef struct ku_pte
 {
@@ -32,30 +35,33 @@ typedef struct PCB
 // free list + alloc list node 개수의 합은 PFN 개수와 동일
 typedef struct node
 {
-    // char pid;
+    unsigned int page_index;
     ku_pte *rmap;
     struct node *prev;
     struct node *next;
 } node;
 
-
 typedef struct linked_list
 {
-    void *head; /* recent */
-    void *tail; /* old */
+    struct node *head; /* recent */
+    struct node *tail; /* old */
 } linked_list;
+
+typedef struct PCB_list
+{
+    struct PCB *head; /* recent */
+} PCB_list;
 
 typedef struct space
 {
     void *alloc_area;
-    struct linked_list free_list;
-    struct linked_list alloc_list;
+    struct linked_list *free_list;
+    struct linked_list *alloc_list;
 } space;
 
 space ku_mmu_swap, ku_mmu_pmem;
 
-linked_list PCB_list;
-linked_list *PCB_list_ptr = &PCB_list;
+PCB_list ku_mmu_PCB_list;
 
 PCB *tempPCB;
 
@@ -66,14 +72,14 @@ PCB *tempPCB;
  */
 void insertPCB(PCB *input)
 {
-    if (PCB_list_ptr->head == NULL)
-        PCB_list_ptr->head = input;
+    if (ku_mmu_PCB_list.head == NULL)
+        ku_mmu_PCB_list.head = input;
     else
     {
-        ((PCB *)(PCB_list_ptr->head))->next = input;
-        input->prev = PCB_list_ptr->head;
+        input->prev = ku_mmu_PCB_list.head;
+        ku_mmu_PCB_list.head = input;
     }
-    PCB_list_ptr->head = input;
+    ku_mmu_PCB_list.head = input;
 }
 
 /**
@@ -84,7 +90,7 @@ void insertPCB(PCB *input)
  */
 PCB *searchPCB(char searching_pid)
 {
-    tempPCB = PCB_list_ptr->head;
+    tempPCB = ku_mmu_PCB_list.head;
     while (tempPCB != NULL)
     {
         if (tempPCB->pid == searching_pid)
@@ -141,14 +147,21 @@ int swap_in(ku_pte *accesed_pte)
  */
 int map_on_pmem(ku_pte *accesed_pte)
 {
-    if (1)
+    node *mapping_location;
+    mapping_location = get_node(ku_mmu_pmem.free_list);
+    if (mapping_location == NULL) 
+    {
         if (swap_out())
             return -1;
-    accesed_pte->PFN; // accessed pte에게 PFN 할당
+        mapping_location = get_node(ku_mmu_pmem.free_list);
+    }
+
+    accesed_pte->PFN = mapping_location->page_index; // accessed pte에게 PFN 할당
     accesed_pte->present_bit = 1;
     accesed_pte->unused_bit = 0;
 
     /* 할당된 pte reverse mapping */
+    mapping_location->rmap = accesed_pte;
     return 0;
 }
 
@@ -158,23 +171,55 @@ int map_on_pmem(ku_pte *accesed_pte)
  * @param input Space name.
  * @param space_size Demanding space size.
  */
+
+int init_linked_list(linked_list **list)
+{
+    *list = (linked_list *)malloc(sizeof(linked_list));
+    if (list == NULL)
+        return -1;
+    node *dummy_node = (node *)malloc(sizeof(node));
+    dummy_node->rmap = 0;
+    (*list)->head = (*list)->tail = dummy_node;
+    return 0;
+}
+
+void put_node(linked_list *list, node *input)
+{
+    list->head->next = input;
+    list->head = input;
+}
+
+node *get_node(linked_list *list)
+{
+    node *output_node = list->tail->next;
+    if(output_node == NULL)
+        return NULL;
+    list->tail = list->tail->next;
+    list->tail->rmap = 0;
+    return output_node;
+}
+
 void init_space(space *input, unsigned int space_size)
 {
     input->alloc_area = (char *)malloc(space_size);
     unsigned int num_of_page_in_input = space_size / PAGE_SIZE;
-    for (int i = 1; i < num_of_page_in_input - 1; i++)
+    init_linked_list(&(input->free_list));
+    init_linked_list(&(input->alloc_list));
+    for (int i = 1; i < num_of_page_in_input; i++)
     {
-        // input -> free_and_alloc[i].pid = 0;
+        node *temp_node = (node *)malloc(sizeof(node));
+        temp_node->page_index = i;
+        put_node(input->free_list, temp_node);
     }
-    // input -> free_and_alloc[num_of_page_in_input].pid = 0;
 }
 
 // 메모리와 스왑 공간 동적할당
 void *ku_mmu_init(unsigned int pmem_size, unsigned int swap_size)
 {
+    ku_mmu_PCB_list.head = malloc(sizeof(node));
     init_space(&ku_mmu_pmem, pmem_size);
     init_space(&ku_mmu_swap, swap_size);
-    PCB_list_ptr->head = NULL;
+    ku_mmu_PCB_list.head = NULL;
     if (ku_mmu_pmem.alloc_area == NULL)
         return 0;
     else
