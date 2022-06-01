@@ -101,6 +101,13 @@ PCB *searchPCB(char searching_pid)
     return NULL;
 }
 
+void reset_node(node *input)
+{
+    input->next = NULL;
+    input->prev = NULL;
+    input->rmap = NULL;
+}
+
 /**
  * @brief Swap out pte to swap space by FIFO.
  *
@@ -109,20 +116,37 @@ PCB *searchPCB(char searching_pid)
 int swap_out()
 {
     /* pmem_index에 매핑되어있는 pte를 swap out시킴 */
-    unsigned int swap_dest;
+    node *swap_dest = get_node(ku_mmu_swap.free_list);
     if (!swap_dest)
         return -1; // swap_dest의 index가 0일 경우 == swap이 꽉 차있을 경우
-    /* swap space 값 변경 */
-
     /* swap out된 pte 값 변경 */
-    ku_pte *swap_out_pte;
+    node *swap_src = get_node(ku_mmu_pmem.alloc_list);
+    if(!swap_src)
+        return -1;
+    ku_pte *swap_out_pte = swap_src->rmap;
     if (!swap_out_pte)
         return -1;
-    swap_out_pte->PFN = (swap_dest & PTE_MASK) >> 1;
-    swap_out_pte->unused_bit = swap_dest & 0x1;
+    swap_dest->rmap = swap_out_pte;
+    swap_out_pte->PFN = (swap_dest->page_index & PTE_MASK) >> 1;
+    swap_out_pte->unused_bit = swap_dest->page_index & 0x1;
     swap_out_pte->present_bit = 0;
-
+    reset_node(swap_src);
+    put_node(ku_mmu_pmem.free_list, swap_src);
+    put_node(ku_mmu_swap.alloc_list, swap_dest);
     return 0;
+}
+
+node *search_node(linked_list *list, unsigned int pte_index)
+{
+    node *temp = list->tail->next;
+    while(temp->next)
+    {
+        if(temp->page_index == pte_index)
+            return temp;
+        else
+            temp = temp->next;
+    }
+    return NULL;
 }
 
 /**
@@ -132,9 +156,19 @@ int swap_out()
  */
 int swap_in(ku_pte *accesed_pte)
 {
-    unsigned int take_back = ((accesed_pte->PFN) << 1) + accesed_pte->unused_bit;
-    node *taking_node;
-    taking_node->rmap = NULL; // free 된 swap을 free list에 insert
+    unsigned int taking_pte_index = ((accesed_pte->PFN) << 1) + accesed_pte->unused_bit;
+    node *src_node = search_node(ku_mmu_swap.alloc_list, taking_pte_index);
+    if(src_node == NULL)
+        return -1;
+    node *prev_node = src_node->prev;
+    node *next_node = src_node->next;
+    prev_node->next = next_node;
+    if(next_node)
+        next_node->prev = prev_node;
+    accesed_pte->PFN = src_node->rmap->PFN;
+    accesed_pte->present_bit = 1;
+    accesed_pte->unused_bit = 0;
+    free(src_node);
     if (map_on_pmem(accesed_pte))
         return -1;
     return 0;
@@ -147,21 +181,22 @@ int swap_in(ku_pte *accesed_pte)
  */
 int map_on_pmem(ku_pte *accesed_pte)
 {
-    node *mapping_location;
-    mapping_location = get_node(ku_mmu_pmem.free_list);
-    if (mapping_location == NULL) 
+    node *mapping_dest;
+    mapping_dest = get_node(ku_mmu_pmem.free_list);
+    if (mapping_dest == NULL) 
     {
-        if (swap_out())
+        if (swap_out() == -1)
             return -1;
-        mapping_location = get_node(ku_mmu_pmem.free_list);
+        mapping_dest = get_node(ku_mmu_pmem.free_list);
     }
-
-    accesed_pte->PFN = mapping_location->page_index; // accessed pte에게 PFN 할당
+    
+    accesed_pte->PFN = mapping_dest->page_index; // accessed pte에게 PFN 할당
     accesed_pte->present_bit = 1;
     accesed_pte->unused_bit = 0;
 
     /* 할당된 pte reverse mapping */
-    mapping_location->rmap = accesed_pte;
+    mapping_dest->rmap = accesed_pte;
+    put_node(ku_mmu_pmem.alloc_list, mapping_dest);
     return 0;
 }
 
@@ -185,18 +220,25 @@ int init_linked_list(linked_list **list)
 
 void put_node(linked_list *list, node *input)
 {
+    input->next = NULL;
+    input->prev = list->head;
     list->head->next = input;
     list->head = input;
 }
 
 node *get_node(linked_list *list)
 {
-    node *output_node = list->tail->next;
-    if(output_node == NULL)
+    node *src_node = list->tail->next;
+    if(src_node == NULL)
         return NULL;
-    list->tail = list->tail->next;
-    list->tail->rmap = 0;
-    return output_node;
+    node *dest_node = (node *)malloc(sizeof(node));
+    dest_node->page_index = src_node->page_index;
+    dest_node->rmap = src_node->rmap;
+    src_node->rmap = NULL;
+    src_node->page_index = 0;
+    free(src_node->prev);
+    list->tail = src_node;
+    return dest_node;
 }
 
 void init_space(space *input, unsigned int space_size)
