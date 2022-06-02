@@ -9,13 +9,20 @@ struct PCB;
 struct PCB_list;
 struct node;
 struct space;
+
 void insertPCB(struct PCB *input);
 struct PCB *searchPCB(char searching_pid);
+void reset_node(struct node *input);
 int swap_out();
 int swap_in(struct ku_pte *accesed_pte);
 int map_on_pmem(struct ku_pte *accesed_pte);
-struct node *get_node(struct linked_list *list);
+int init_linked_list(struct linked_list **list);
 void put_node(struct linked_list *list, struct node *input);
+struct node *get_node(struct linked_list *list);
+void init_space(struct space *input, unsigned int space_size);
+void *ku_mmu_init(unsigned int pmem_size, unsigned int swap_size);
+int ku_run_proc(char fpid, void **ku_cr3);
+int ku_page_fault(char pid, char va);
 
 typedef struct ku_pte
 {
