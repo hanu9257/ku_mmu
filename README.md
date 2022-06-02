@@ -3,9 +3,15 @@ Operating System 2022, Spring assignment2 repo
 
 ## About
 
-This repo contains code about imitating OS's page swapping.
+This repo contains C program about imitating OS's page swapping.
 
-## TODO
-Code refacoring.
+You can test using `input_creator.sh`
 
-Create automatic test.
+### `input_creator.sh`
+
+Usage 
+```
+./input_creator.sh {# of processes} {# of input}
+```
+This shell script will create `test.txt` in a given directory.
+
