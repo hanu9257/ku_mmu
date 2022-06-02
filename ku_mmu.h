@@ -12,7 +12,7 @@ struct space;
 
 void insertPCB(struct PCB *input);
 struct PCB *searchPCB(char searching_pid);
-void reset_node(struct node *input);
+void clear_node(struct node *input);
 int swap_out();
 int swap_in(struct ku_pte *accesed_pte);
 int map_on_pmem(struct ku_pte *accesed_pte);
@@ -108,7 +108,12 @@ PCB *searchPCB(char searching_pid)
     return NULL;
 }
 
-void reset_node(node *input)
+/**
+ * @brief Clear node object's data.
+ * 
+ * @param input Clearing node object's address. 
+ */
+void clear_node(node *input)
 {
     input->next = NULL;
     input->prev = NULL;
@@ -116,7 +121,7 @@ void reset_node(node *input)
 }
 
 /**
- * @brief Swap out pte to swap space by FIFO.
+ * @brief Swap out PTE to swap space by FIFO.
  *
  * @return 0 on success, -1 on error.
  */
@@ -137,18 +142,25 @@ int swap_out()
     swap_out_pte->PFN = (swap_dest->page_index & PTE_MASK) >> 1;
     swap_out_pte->unused_bit = swap_dest->page_index & 0x1;
     swap_out_pte->present_bit = 0;
-    reset_node(swap_src);
+    clear_node(swap_src);
     put_node(ku_mmu_pmem.free_list, swap_src);
     put_node(ku_mmu_swap.alloc_list, swap_dest);
     return 0;
 }
 
-node *search_node(linked_list *list, unsigned int pte_index)
+/**
+ * @brief Search the node object in alloceated list coresponding to given swap index.
+ * 
+ * @param list Linked list to search.
+ * @param swap_index Searching PTE's swap index.
+ * @return Node object's address on success, NULL on failure.
+ */
+node *search_node(linked_list *list, unsigned int swap_index)
 {
     node *temp = list->tail->next;
     while(temp)
     {
-        if(temp->page_index == pte_index)
+        if(temp->page_index == swap_index)
             return temp;
         else
             temp = temp->next;
@@ -163,8 +175,8 @@ node *search_node(linked_list *list, unsigned int pte_index)
  */
 int swap_in(ku_pte *accesed_pte)
 {
-    unsigned int taking_pte_index = ((accesed_pte->PFN) << 1) + accesed_pte->unused_bit;
-    node *src_node = search_node(ku_mmu_swap.alloc_list, taking_pte_index);
+    unsigned int taking_swap_index = ((accesed_pte->PFN) << 1) + accesed_pte->unused_bit;
+    node *src_node = search_node(ku_mmu_swap.alloc_list, taking_swap_index);
     if(src_node == NULL)
         return -1;
     node *prev_node = src_node->prev;
@@ -198,13 +210,11 @@ int map_on_pmem(ku_pte *accesed_pte)
             return -1;
         mapping_dest = get_node(ku_mmu_pmem.free_list);
     }
-    
-    accesed_pte->PFN = mapping_dest->page_index; // accessed pte에게 PFN 할당
+    accesed_pte->PFN = mapping_dest->page_index; /* accessed pte에게 PFN 할당 */
     accesed_pte->present_bit = 1;
     accesed_pte->unused_bit = 0;
-
-    /* 할당된 pte reverse mapping */
-    mapping_dest->rmap = accesed_pte;
+    
+    mapping_dest->rmap = accesed_pte; /* PTE reverse mapping */
     put_node(ku_mmu_pmem.alloc_list, mapping_dest);
     return 0;
 }
@@ -227,6 +237,12 @@ int init_linked_list(linked_list **list)
     return 0;
 }
 
+/**
+ * @brief Put the node object to linked list.
+ * 
+ * @param list Linked list to put node.
+ * @param input Putting node object.
+ */
 void put_node(linked_list *list, node *input)
 {
     input->next = NULL;
@@ -235,6 +251,12 @@ void put_node(linked_list *list, node *input)
     list->head = input;
 }
 
+/**
+ * @brief Get the node object from linked list.
+ * 
+ * @param list Linked list to get node.
+ * @return Node object's address by LRU on success, NULL on error.
+ */
 node *get_node(linked_list *list)
 {
     node *src_node = list->tail->next;
@@ -250,6 +272,12 @@ node *get_node(linked_list *list)
     return dest_node;
 }
 
+/**
+ * @brief Initialize memory space.
+ * 
+ * @param input Initializing space object's address.
+ * @param space_size Space's allocation size.
+ */
 void init_space(space *input, unsigned int space_size)
 {
     input->alloc_area = (char *)malloc(space_size);
@@ -264,7 +292,13 @@ void init_space(space *input, unsigned int space_size)
     }
 }
 
-// 메모리와 스왑 공간 동적할당
+/**
+ * @brief Initialize physical memory and swap space.
+ * 
+ * @param pmem_size Size of physical memory.
+ * @param swap_size Size of swap space.
+ * @return Physical memory's address on success, NULL on error.
+ */
 void *ku_mmu_init(unsigned int pmem_size, unsigned int swap_size)
 {
     ku_mmu_PCB_list.head = malloc(sizeof(node));
@@ -272,21 +306,23 @@ void *ku_mmu_init(unsigned int pmem_size, unsigned int swap_size)
     init_space(&ku_mmu_swap, swap_size);
     ku_mmu_PCB_list.head = NULL;
     if (ku_mmu_pmem.alloc_area == NULL)
-        return 0;
+        return NULL;
     else
         return ku_mmu_pmem.alloc_area;
 }
 
-// 새로운 프로세스 생성 but 실제로 fork()를 통해 생성하는 것이 아닌 새로운 PCB만 생성
-// PDBR(CR3) 새로운 프로세스를 위해 갱신
-// 전에 생성된 프로세스라면 해당 프로세스의 PDBR 반환
-// 프로세스당 256B Page Table 생성
-// PCB를 PCB list에 insert
+/**
+ * @brief Create PCB for new process
+ * 
+ * @param fpid Finding process id.
+ * @param ku_cr3 For returning finding process's PTBR.
+ * @return 0 on success, -1 on error.
+ */
 int ku_run_proc(char fpid, void **ku_cr3)
 {
     tempPCB = searchPCB(fpid);
-    if (!tempPCB)
-    { // PCBlist에 fpid에 해당하는 PCB가 없을 경우
+    if (tempPCB == NULL)
+    {
         tempPCB = (PCB *)malloc(sizeof(PCB));
         tempPCB->PTBR = (ku_pte *)calloc(64, sizeof(ku_pte));
         tempPCB->pid = fpid;
@@ -296,19 +332,22 @@ int ku_run_proc(char fpid, void **ku_cr3)
     return 0;
 }
 
-// PTE did not mapped
-// swaped out?? or map new PTE?? Both case needs to consider free space in swap and pmem
-// 해당 함수가 호출되면 이후 ku_trav()가 실행될 때 address translation 성공 필요
-// ! swap 계열의 함수 작동 실패시 -1 반환 후 ku_page_fault 종료해야함
+/**
+ * @brief Manage page fault by mapping page on physical memeory.
+ * 
+ * @param pid Accessing process ID.
+ * @param va Accessing virtual address.
+ * @return 0 on success, -1 on error.
+ */
 int ku_page_fault(char pid, char va)
 {
-    ku_pte *page_table = tempPCB->PTBR; // PCB를 통해
+    ku_pte *page_table = tempPCB->PTBR; /* get PTBR by PCB */
     char pte_offset = (va & PFN_MASK) >> 2;
-    ku_pte *target_pte = page_table + pte_offset; // 여기서 3시간 날림 대체 char *랑 ku_pte * 크기가 왜 다를까?
+    ku_pte *target_pte = page_table + pte_offset;
     if (target_pte->PFN == 0x0 && target_pte->unused_bit == 0x0)
     {
         if (map_on_pmem(target_pte))
-            return -1; // TODO pbit이 아닌 ubit 값이 갱신됨
+            return -1;
     }
     else
     {
