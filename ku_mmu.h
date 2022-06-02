@@ -70,7 +70,7 @@ space ku_mmu_swap, ku_mmu_pmem;
 
 PCB_list ku_mmu_PCB_list;
 
-PCB *tempPCB;
+PCB *ku_mmu_tempPCB;
 
 /**
  * @brief Insert new process's PCB to PCB list.
@@ -97,13 +97,13 @@ void insertPCB(PCB *input)
  */
 PCB *searchPCB(char searching_pid)
 {
-    tempPCB = ku_mmu_PCB_list.head;
-    while (tempPCB != NULL)
+    ku_mmu_tempPCB = ku_mmu_PCB_list.head;
+    while (ku_mmu_tempPCB != NULL)
     {
-        if (tempPCB->pid == searching_pid)
-            return tempPCB;
+        if (ku_mmu_tempPCB->pid == searching_pid)
+            return ku_mmu_tempPCB;
         else
-            tempPCB = tempPCB->prev;
+            ku_mmu_tempPCB = ku_mmu_tempPCB->prev;
     }
     return NULL;
 }
@@ -320,15 +320,17 @@ void *ku_mmu_init(unsigned int pmem_size, unsigned int swap_size)
  */
 int ku_run_proc(char fpid, void **ku_cr3)
 {
-    tempPCB = searchPCB(fpid);
-    if (tempPCB == NULL)
+    ku_mmu_tempPCB = searchPCB(fpid);
+    if (ku_mmu_tempPCB == NULL)
     {
-        tempPCB = (PCB *)malloc(sizeof(PCB));
-        tempPCB->PTBR = (ku_pte *)calloc(64, sizeof(ku_pte));
-        tempPCB->pid = fpid;
-        insertPCB(tempPCB);
+        ku_mmu_tempPCB = (PCB *)malloc(sizeof(PCB));
+        ku_mmu_tempPCB->PTBR = (ku_pte *)calloc(64, sizeof(ku_pte));
+        ku_mmu_tempPCB->pid = fpid;
+        insertPCB(ku_mmu_tempPCB);
     }
-    *ku_cr3 = tempPCB->PTBR;
+    if(ku_mmu_tempPCB == NULL)
+        return -1; 
+    *ku_cr3 = ku_mmu_tempPCB->PTBR;
     return 0;
 }
 
@@ -341,7 +343,7 @@ int ku_run_proc(char fpid, void **ku_cr3)
  */
 int ku_page_fault(char pid, char va)
 {
-    ku_pte *page_table = tempPCB->PTBR; /* get PTBR by PCB */
+    ku_pte *page_table = ku_mmu_tempPCB->PTBR; /* get PTBR by PCB */
     char pte_offset = (va & PFN_MASK) >> 2;
     ku_pte *target_pte = page_table + pte_offset;
     if (target_pte->PFN == 0x0 && target_pte->unused_bit == 0x0)
